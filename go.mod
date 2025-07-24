@@ -1,4 +1,4 @@
-module puremail
+module github.com/Bookshelf-Writer/puremail
 
 go 1.24
 

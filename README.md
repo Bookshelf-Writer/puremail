@@ -1,3 +1,9 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/Bookshelf-Writer/puremail)](https://goreportcard.com/report/github.com/Bookshelf-Writer/puremail)
+
+![GitHub repo file or directory count](https://img.shields.io/github/directory-file-count/Bookshelf-Writer/puremail?color=orange)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/Bookshelf-Writer/puremail?color=green)
+![GitHub repo size](https://img.shields.io/github/repo-size/Bookshelf-Writer/puremail)
+
 # puremail
 
 A blazing‑fast, zero‑allocation Go package for strict e‑mail parsing, tag trimming and
