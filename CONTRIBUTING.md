@@ -9,7 +9,7 @@ First of all, **thank you for taking the time to contribute!** Your help, ideas 
 ## 1. Getting Started
 
 1. **Fork** the repository and clone your fork locally.
-2. Ensure you have **Go ≥ 1.22** installed.
+2. Ensure you have **Go ≥ 1.24** installed.
 3. Install development tools:
 
    ```bash
@@ -40,12 +40,12 @@ We follow the “fork & pull request” model—direct pushes to `main` are disa
 
 ## 4. Commit Messages
 
-Use the [Conventional Commits](https://www.conventionalcommits.org/) spec:
+Use the [Conventional Commits](https://www.conventionalcommits.org/) spec:
 
 ```
 <type>(<scope>): <subject>
 
-<body>  # optional, wrap at 72 chars
+<body>  # optional, wrap at 72 chars
 
 <footer> # optional
 ```
@@ -53,11 +53,11 @@ Use the [Conventional Commits](https://www.conventionalcommits.org/) spec:
 Examples:
 
 * `feat(parser): add punycode auto‑decode`
-* `fix(hash): correct output length under 20 bytes`
+* `fix(hash): correct output length under 20 bytes`
 
 ## 5. Pull‑Request Checklist
 
-* [ ] **Clear title**  — imperative mood, no trailing period.
+* [ ] **Clear title** — imperative mood, no trailing period.
 * [ ] Description covers **what changed**, **why it matters**, and **benefits**.
 * [ ] Linked issue(s) or reference to discussion.
 * [ ] `go test ./...` passes locally.
@@ -87,7 +87,7 @@ This project adopts the [Contributor Covenant v2.0](CODE_OF_CONDUCT.md). Be resp
 
 ## 9. Security Policy
 
-Please **do not** open public issues for security vulnerabilities. Instead, mail `git@sunsung.fun`.
+Please **do not** open public issues for security vulnerabilities. Instead, mail `git@sunsung.fun`.
 
 ## 10. License
 
