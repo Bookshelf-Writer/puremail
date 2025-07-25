@@ -77,13 +77,13 @@ func Decode(data []byte) (*EmailObj, error) {
 	obj := new(EmailObj)
 	obj.len = 1
 
-	if data[0] == 0 {
+	if data[0] == 0 || int(data[0]) > len(data)-obj.len {
 		return nil, ErrMalformed
 	}
 	obj.login = string(data[1 : data[0]+1])
 	obj.len += len(obj.login)
 
-	if data[data[0]+1] == 0 {
+	if data[data[0]+1] == 0 || int(data[data[0]+1]) > len(data)-obj.len {
 		return nil, ErrMalformed
 	}
 	obj.domain = string(data[data[0]+2 : data[0]+2+data[data[0]+1]])
@@ -100,6 +100,9 @@ func Decode(data []byte) (*EmailObj, error) {
 				continue
 			} else {
 				bufLen := int(payload[i])
+				if bufLen == 0 || bufLen > len(data)-obj.len {
+					return nil, ErrMalformed
+				}
 
 				obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: prefix, text: string(payload[i+1 : i+bufLen+1])})
 
