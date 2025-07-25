@@ -1,9 +1,15 @@
 package puremail
 
 import (
+	"context"
 	"encoding/binary"
 	"hash/crc32"
+	"net"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // // // // // // // // // //
@@ -20,6 +26,10 @@ type testEncodeObj struct {
 	name    string
 	obj     *EmailObj
 	wantErr error
+}
+
+func init() {
+	InitDefault()
 }
 
 //
@@ -102,6 +112,77 @@ func FuzzDecode(f *testing.F) {
 	})
 }
 
+//
+
+func stubMxLookup(counter *int32) func(ctx context.Context, domain string) ([]*net.MX, error) {
+	return func(ctx context.Context, domain string) ([]*net.MX, error) {
+		atomic.AddInt32(counter, 1)
+		return []*net.MX{{Host: "mx." + domain, Pref: 10}}, nil
+	}
+}
+
+func TestMxCacheHit(t *testing.T) {
+	var calls int32
+
+	old := lookupMX
+	lookupMX = stubMxLookup(&calls)
+	defer func() { lookupMX = old }()
+
+	if err := newObj("", "example.com").HasMX(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("want 1 DNS lookup, got %d", got)
+	}
+}
+
+func TestMxSingleFlight(t *testing.T) {
+	var calls int32
+	oldLookup := lookupMX
+	lookupMX = func(ctx context.Context, domain string) ([]*net.MX, error) {
+		atomic.AddInt32(&calls, 1)
+		time.Sleep(40 * time.Millisecond)
+		return []*net.MX{{Host: "mx." + domain, Pref: 10}}, nil
+	}
+	defer func() { lookupMX = oldLookup }()
+
+	const workers = 20
+	wg := sync.WaitGroup{}
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func() {
+			defer wg.Done()
+			if err := newObj("", "parallel.com").HasMX(); err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("want 1 DNS lookup, got %d", got)
+	}
+}
+
+func TestMxConcurrencyLimit(t *testing.T) {
+	start := make(chan struct{})
+	done := make(chan struct{})
+
+	for i := 0; i < 3; i++ {
+		go func() {
+			<-start
+			newObj("", "example.com").HasMX()
+			done <- struct{}{}
+		}()
+	}
+	close(start)
+
+	time.Sleep(100 * time.Millisecond)
+	if n := len(done); n > 2 {
+		t.Fatalf("limit broken: %d done, want ≤2", n)
+	}
+}
+
 // //
 
 func BenchmarkEmailBytesPrefix(b *testing.B) {
@@ -177,4 +258,60 @@ func BenchmarkEmailHashFull(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		obj.HashFull()
 	}
+}
+
+//
+
+func BenchmarkHasMXCached(b *testing.B) {
+	var calls int32
+	oldLookup := lookupMX
+	lookupMX = stubMxLookup(&calls)
+	defer func() { lookupMX = oldLookup }()
+
+	obj := newObj("", "example.com")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		obj.HasMX()
+	}
+
+	b.ReportMetric(float64(atomic.LoadInt32(&calls)), "dns_calls")
+}
+
+func BenchmarkHasMXMiss(b *testing.B) {
+	var calls int32
+	oldLookup := lookupMX
+	lookupMX = stubMxLookup(&calls)
+	defer func() { lookupMX = oldLookup }()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		newObj("", "miss"+strconv.Itoa(i)+".com").HasMX()
+	}
+
+	b.ReportMetric(float64(atomic.LoadInt32(&calls)), "dns_calls")
+}
+
+func BenchmarkHasMXParallel(b *testing.B) {
+	var calls int32
+	oldLookup := lookupMX
+	lookupMX = func(ctx context.Context, domain string) ([]*net.MX, error) {
+		atomic.AddInt32(&calls, 1)
+		return []*net.MX{{Host: "mx." + domain, Pref: 10}}, nil
+	}
+	defer func() { lookupMX = oldLookup }()
+
+	obj := newObj("", "p.com")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			obj.HasMX()
+		}
+	})
+
+	b.ReportMetric(float64(atomic.LoadInt32(&calls)), "dns_calls")
 }

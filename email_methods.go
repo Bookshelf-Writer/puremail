@@ -1,9 +1,5 @@
 package puremail
 
-import (
-	"net"
-)
-
 // // // // // // // // // //
 
 func (obj *EmailObj) Prefixes() []EmailPrefixObj {
@@ -40,19 +36,4 @@ func (obj *EmailObj) MailFull() string {
 	b = append(b, obj.domain...)
 
 	return string(b)
-}
-
-//
-
-func (obj *EmailObj) HasMX() error {
-	mx, err := net.LookupMX(obj.domain)
-	if err != nil {
-		return err
-	}
-
-	if len(mx) == 0 {
-		return ErrNilMX
-	}
-
-	return nil
 }

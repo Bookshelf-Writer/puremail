@@ -1,13 +1,12 @@
 package puremail
 
-import "sync"
+import (
+	"errors"
+)
 
 // // // // // // // // // //
 
-var (
-	loginTable [256]bool
-	emailPool  = sync.Pool{New: func() any { return &EmailObj{} }}
-)
+var loginTable [256]bool
 
 func init() {
 	for _, c := range []byte("abcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+/=?^_`{|}~-") {
@@ -49,13 +48,6 @@ func isValidLabel(label string) bool {
 		}
 	}
 	return true
-}
-
-func clearEmailPool(e *EmailObj) {
-	e.login, e.domain = "", ""
-	e.len = 0
-	e.prefixes = e.prefixes[:0]
-	emailPool.Put(e)
 }
 
 //
@@ -107,13 +99,22 @@ func isValidDomain(s string) bool {
 	return true
 }
 
+func parseRecover(err *error) {
+	if r := recover(); r != nil {
+		*err = errors.Join(ErrPanic, *err)
+	}
+}
+
 // //
 
-func parseInto(obj *EmailObj, s string, isShot bool) error {
+func parse(s string, isShot bool) (obj *EmailObj, err error) {
 	if len(s) > 254 {
-		return ErrLenMax
+		return nil, ErrLenMax
 	}
 
+	defer parseRecover(&err)
+
+	obj = new(EmailObj)
 	obj.len = len(s)
 
 	var buf [254]byte
@@ -134,15 +135,18 @@ func parseInto(obj *EmailObj, s string, isShot bool) error {
 				tag = 0
 			} else {
 				if bufLen == 0 {
-					return ErrInvalidLogin
+					err = ErrInvalidLogin
+					return
 				}
 				if len(obj.login) > 0 {
-					return ErrManyA
+					err = ErrManyA
+					return
 				}
 
 				obj.login = string(buf[:bufLen])
 				if !isValidLogin(obj.login) {
-					return ErrInvalidLoginChars
+					err = ErrInvalidLoginChars
+					return
 				}
 			}
 
@@ -152,12 +156,14 @@ func parseInto(obj *EmailObj, s string, isShot bool) error {
 		case '+', '=':
 			if len(obj.login) == 0 {
 				if bufLen == 0 {
-					return ErrInvalidLogin
+					err = ErrInvalidLogin
+					return
 				}
 
 				obj.login = string(buf[:bufLen])
 				if !isValidLogin(obj.login) {
-					return ErrInvalidLoginChars
+					err = ErrInvalidLoginChars
+					return
 				}
 
 			} else if tag != 0 && !isShot {
@@ -185,28 +191,23 @@ func parseInto(obj *EmailObj, s string, isShot bool) error {
 	switch status {
 	case 1:
 		if bufLen == 0 {
-			return ErrInvalidDomain
+			err = ErrInvalidDomain
+			return
 		}
 		obj.domain = string(buf[:bufLen])
 
 		if !isValidDomain(obj.domain) {
-			return ErrInvalidDomainChars
+			err = ErrInvalidDomainChars
+			return
 		}
-		return nil
+		return
 
 	case 2:
-		return ErrEndToTag
+		err = ErrEndToTag
+		return
 
 	default:
-		return ErrEndToEOF
+		err = ErrEndToEOF
+		return
 	}
-}
-
-func parse(s string, withPrefixes bool) (*EmailObj, error) {
-	e := emailPool.Get().(*EmailObj)
-	if err := parseInto(e, s, withPrefixes); err != nil {
-		clearEmailPool(e)
-		return nil, err
-	}
-	return e, nil
 }

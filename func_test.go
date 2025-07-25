@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -197,6 +198,92 @@ func TestParse_Errors(t *testing.T) {
 	}
 }
 
+func FuzzParse(f *testing.F) {
+	seeds := []string{
+		"user@example.com",
+		"ALICE+dev=gophers@Example.IO",
+		strings.Repeat("a", 63) + "@a.ua",
+		"bob@localhost",
+		"привіт@xn--80asehdb",
+		"a@b",
+		"",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, mail string) {
+		for _, shot := range []bool{true, false} {
+			obj, err := parse(mail, shot)
+			if err != nil {
+				continue
+			}
+
+			if obj == nil {
+				t.Fatalf("parse(%q): err == nil, but obj == nil", mail)
+			}
+
+			if shot && len(obj.Prefixes()) != 0 {
+				t.Fatalf("shot‑mode: prefixes received %#v", obj.Prefixes())
+			}
+
+			if obj.Login() == "" || obj.Domain() == "" || !strings.Contains(obj.MailFull(), "@") {
+				t.Fatalf("incorrect object for%q: %+v", mail, obj)
+			}
+
+			reparse, err := parse(obj.MailFull(), false)
+			if err != nil {
+				t.Fatalf("re‑parse(%q): %v", obj.MailFull(), err)
+			}
+			if strings.ToLower(reparse.MailFull()) != strings.ToLower(obj.MailFull()) {
+				t.Fatalf("re‑parse mismatch: %q vs %q", reparse.MailFull(), obj.MailFull())
+			}
+		}
+	})
+}
+
+//
+
+type testParseAsyncObj struct {
+	adr      string
+	hash     [hashBlockSize]byte
+	hashFull [hashBlockSize]byte
+}
+
+func TestAsync(t *testing.T) {
+	addresses := make([]testParseAsyncObj, 1000)
+	for i := range addresses {
+		adr := fmt.Sprintf("user%03d+prefix%03d=sufix%03d@host0.com", i, i, i)
+		obj, _ := parse(adr, false)
+		addresses[i] = testParseAsyncObj{adr: adr, hash: obj.Hash(), hashFull: obj.HashFull()}
+	}
+
+	var wg sync.WaitGroup
+	for _, adrObj := range addresses {
+		wg.Add(1)
+
+		go func(adrObj *testParseAsyncObj) {
+			defer wg.Done()
+
+			if t.Failed() {
+				return
+			}
+
+			obj, _ := parse(adrObj.adr, false)
+			if obj.MailFull() != adrObj.adr {
+				t.Errorf("mail full = %q, want %q", obj.MailFull(), adrObj.adr)
+			}
+			if obj.Hash() != adrObj.hash {
+				t.Errorf("hash = %02x, want %02x", obj.Hash(), adrObj.hash)
+			}
+			if obj.HashFull() != adrObj.hashFull {
+				t.Errorf("hashFull = %02x, want %02x", obj.HashFull(), adrObj.hashFull)
+			}
+		}(&adrObj)
+	}
+	wg.Wait()
+}
+
 // //
 
 type benchParseObj struct {
@@ -230,32 +317,31 @@ func BenchmarkParse(b *testing.B) {
 		}
 
 		for prefix := 0; prefix < 2; prefix++ {
-			for free := 0; free < 2; free++ {
-				name := tc.name
-				if prefix == 1 {
-					name += "WithPrefixes"
-				}
-				if free == 1 {
-					name += "Free"
-				}
-
-				b.Run(name, func(b *testing.B) {
-					b.ReportAllocs()
-					b.ResetTimer()
-					for n := 0; n < b.N; n++ {
-						for _, addr := range addresses {
-							obj, err := parse(addr, prefix == 1)
-							if err != nil {
-								b.Fatal(err)
-							}
-							if free == 1 {
-								obj.Free()
-							}
-
-						}
-					}
-				})
+			name := tc.name
+			if prefix == 1 {
+				name += "WithPrefixes"
 			}
+
+			var err error
+			b.Run(name, func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for n := 0; n < b.N; n++ {
+					for _, addr := range addresses {
+						if prefix == 1 {
+							_, err = NewFast(addr)
+						} else {
+							_, err = New(addr)
+						}
+						if err != nil {
+							b.Fatal(err)
+						}
+
+					}
+				}
+
+			})
 		}
 
 	}
