@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -195,6 +196,47 @@ func TestParse_Errors(t *testing.T) {
 			}
 		})
 	}
+}
+
+//
+
+type testParseAsyncObj struct {
+	adr      string
+	hash     [hashBlockSize]byte
+	hashFull [hashBlockSize]byte
+}
+
+func TestAsync(t *testing.T) {
+	addresses := make([]testParseAsyncObj, 1000)
+	for i := range addresses {
+		adr := fmt.Sprintf("user%03d+prefix%03d=sufix%03d@host0.com", i, i, i)
+		obj, _ := parse(adr, false)
+		addresses[i] = testParseAsyncObj{adr: adr, hash: obj.Hash(), hashFull: obj.HashFull()}
+	}
+
+	var wg sync.WaitGroup
+	for _, adrObj := range addresses {
+		go func(adrObj *testParseAsyncObj) {
+			wg.Add(1)
+			defer wg.Done()
+
+			if t.Failed() {
+				return
+			}
+
+			obj, _ := parse(adrObj.adr, false)
+			if obj.MailFull() != adrObj.adr {
+				t.Errorf("mail full = %q, want %q", obj.MailFull(), adrObj.adr)
+			}
+			if obj.Hash() != adrObj.hash {
+				t.Errorf("hash = %02x, want %02x", obj.Hash(), adrObj.hash)
+			}
+			if obj.HashFull() != adrObj.hashFull {
+				t.Errorf("hashFull = %02x, want %02x", obj.HashFull(), adrObj.hashFull)
+			}
+		}(&adrObj)
+	}
+	wg.Wait()
 }
 
 // //

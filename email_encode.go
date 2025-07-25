@@ -1,7 +1,6 @@
 package puremail
 
 import (
-	"bytes"
 	"encoding/binary"
 	"hash/crc32"
 	"strings"
@@ -34,26 +33,25 @@ func (obj *EmailObj) String() string {
 }
 
 func (obj *EmailObj) Bytes() []byte {
-	var b bytes.Buffer
-	b.Grow(obj.len + 5)
+	buf := make([]byte, 0, obj.len+5)
 
-	b.WriteByte(byte(len(obj.login)))
-	b.WriteString(obj.login)
+	buf = append(buf, byte(len(obj.login)))
+	buf = append(buf, obj.login...)
 
-	b.WriteByte(byte(len(obj.domain)))
-	b.WriteString(obj.domain)
+	buf = append(buf, byte(len(obj.domain)))
+	buf = append(buf, obj.domain...)
 
-	for _, prefix := range obj.prefixes {
-		b.WriteByte(prefix.char)
-		b.WriteByte(byte(len(prefix.text)))
-		b.WriteString(prefix.text)
+	for _, p := range obj.prefixes {
+		buf = append(buf, p.char)
+		buf = append(buf, byte(len(p.text)))
+		buf = append(buf, p.text...)
 	}
 
 	crc := make([]byte, 4)
-	binary.LittleEndian.PutUint32(crc, crc32.ChecksumIEEE(b.Bytes()))
-	b.Write(crc)
+	binary.LittleEndian.PutUint32(crc, crc32.ChecksumIEEE(buf))
+	buf = append(buf, crc...)
 
-	return b.Bytes()
+	return buf
 }
 
 func Decode(data []byte) (*EmailObj, error) {
