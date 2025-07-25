@@ -1,90 +1,107 @@
 package puremail
 
 import (
-	"container/list"
 	"context"
 	"golang.org/x/sync/singleflight"
+	"hash/crc32"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // // // // // // // // // //
 
 var (
-	VARmxTTL      = time.Hour * 24
-	VARmxCapacity = 10_000 // max 1.2МБ
-	VARdnsTimeout = 3 * time.Second
-)
+	PosTTL       = 6 * time.Hour
+	NegTTL       = 15 * time.Minute
+	DnsTimeout   = 1500 * time.Millisecond
+	RefreshAhead = 10 * time.Minute
 
-type mxResultObj struct {
-	err    error
-	expire time.Time
-	elem   *list.Element
-}
-
-type mxCacheObj struct {
-	mu    sync.Mutex
-	data  map[string]*mxResultObj
-	lru   *list.List
-	group singleflight.Group
-}
-
-func newMxCache() *mxCacheObj {
-	return &mxCacheObj{
-		data: make(map[string]*mxResultObj, 128),
-		lru:  list.New(),
-	}
-}
-
-var (
-	globalMX = newMxCache()
+	errNoMX  = &net.DNSError{Err: ErrNilMX.Error(), IsNotFound: true}
 	lookupMX = net.DefaultResolver.LookupMX
 )
 
+type mxEntryObj struct {
+	err    error
+	expire int64
+}
+type mxShardCacheObj struct {
+	mu    sync.RWMutex
+	data  map[string]*mxEntryObj
+	group singleflight.Group
+}
+
+const (
+	shardBits  = 8
+	shardCount = 1 << shardBits
+	shardMask  = shardCount - 1
+)
+
+var shards [shardCount]mxShardCacheObj
+
+func init() {
+	for i := range shards {
+		shards[i].data = make(map[string]*mxEntryObj, 1024)
+	}
+}
+
 //
 
-func (c *mxCacheObj) hasMX(domain string) error {
-	now := time.Now()
-	c.mu.Lock()
-
-	if ent, ok := c.data[domain]; ok && ent.expire.After(now) {
-		c.lru.MoveToFront(ent.elem)
-		err := ent.err
-		c.mu.Unlock()
-		return err
+func nextTTL(positive bool) time.Duration {
+	if positive {
+		return PosTTL
 	}
-	c.mu.Unlock()
+	return NegTTL
+}
 
-	v, _, _ := c.group.Do(domain, func() (interface{}, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), VARdnsTimeout)
+func (obj *EmailObj) HasMX() error {
+	now := time.Now()
+	idx := crc32.ChecksumIEEE([]byte(obj.domain)) & shardMask
+	sh := &shards[idx]
+
+	sh.mu.RLock()
+	ent := sh.data[obj.domain]
+	sh.mu.RUnlock()
+
+	if ent != nil {
+		exp := atomic.LoadInt64(&ent.expire)
+		if now.UnixNano() < exp {
+			if time.Until(time.Unix(0, exp)) < RefreshAhead {
+				atomic.StoreInt64(&ent.expire, now.Add(nextTTL(ent.err == nil)).UnixNano())
+			}
+			return ent.err
+		}
+	}
+
+	v, _, _ := sh.group.Do(obj.domain, func() (any, error) {
+		sh.mu.RLock()
+		ent2 := sh.data[obj.domain]
+		sh.mu.RUnlock()
+		if ent2 != nil && now.UnixNano() < atomic.LoadInt64(&ent2.expire) {
+			return ent2.err, nil
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), DnsTimeout)
 		defer cancel()
 
-		mx, err := lookupMX(ctx, domain)
-		if err == nil && len(mx) == 0 {
-			err = ErrNilMX
+		mx, lookupErr := lookupMX(ctx, obj.domain)
+
+		var entryErr error
+		if lookupErr != nil || len(mx) == 0 {
+			entryErr = errNoMX
 		}
 
-		c.mu.Lock()
-		if ent, ok := c.data[domain]; ok {
-			ent.err, ent.expire = err, now.Add(VARmxTTL)
-			c.lru.MoveToFront(ent.elem)
-		} else {
-			elem := c.lru.PushFront(domain)
-			c.data[domain] = &mxResultObj{
-				err:    err,
-				expire: now.Add(VARmxTTL),
-				elem:   elem,
-			}
-			if c.lru.Len() > VARmxCapacity {
-				oldest := c.lru.Back()
-				evictDom := oldest.Value.(string)
-				delete(c.data, evictDom)
-				c.lru.Remove(oldest)
-			}
+		newEntry := &mxEntryObj{
+			err:    entryErr,
+			expire: time.Now().Add(nextTTL(entryErr == nil)).UnixNano(),
 		}
-		c.mu.Unlock()
-		return err, nil
+
+		sh.mu.Lock()
+		sh.data[obj.domain] = newEntry
+		sh.mu.Unlock()
+
+		return entryErr, nil
 	})
 
 	err, ok := v.(error)
@@ -93,8 +110,4 @@ func (c *mxCacheObj) hasMX(domain string) error {
 	} else {
 		return nil
 	}
-}
-
-func (obj *EmailObj) HasMX() error {
-	return globalMX.hasMX(obj.domain)
 }
