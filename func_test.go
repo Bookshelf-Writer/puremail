@@ -216,8 +216,9 @@ func TestAsync(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for _, adrObj := range addresses {
+		wg.Add(1)
+
 		go func(adrObj *testParseAsyncObj) {
-			wg.Add(1)
 			defer wg.Done()
 
 			if t.Failed() {
@@ -277,18 +278,25 @@ func BenchmarkParse(b *testing.B) {
 				name += "WithPrefixes"
 			}
 
+			var err error
 			b.Run(name, func(b *testing.B) {
 				b.ReportAllocs()
 				b.ResetTimer()
+
 				for n := 0; n < b.N; n++ {
 					for _, addr := range addresses {
-						_, err := parse(addr, prefix == 1)
+						if prefix == 1 {
+							_, err = NewFast(addr)
+						} else {
+							_, err = New(addr)
+						}
 						if err != nil {
 							b.Fatal(err)
 						}
 
 					}
 				}
+
 			})
 		}
 

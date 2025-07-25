@@ -15,11 +15,20 @@ import (
 var (
 	PosTTL       = 6 * time.Hour
 	NegTTL       = 15 * time.Minute
-	DnsTimeout   = 1500 * time.Millisecond
+	DnsTimeout   = 400 * time.Millisecond
 	RefreshAhead = 10 * time.Minute
 
 	errNoMX  = &net.DNSError{Err: ErrNilMX.Error(), IsNotFound: true}
 	lookupMX = net.DefaultResolver.LookupMX
+)
+
+const (
+	shardBits  = 8
+	shardCount = 1 << shardBits
+	shardMask  = shardCount - 1
+
+	maxEntriesPerShard = 200_000
+	pruneEveryN        = 1_000
 )
 
 type mxEntryObj struct {
@@ -27,16 +36,11 @@ type mxEntryObj struct {
 	expire int64
 }
 type mxShardCacheObj struct {
-	mu    sync.RWMutex
-	data  map[string]*mxEntryObj
-	group singleflight.Group
+	mu       sync.RWMutex
+	data     map[string]*mxEntryObj
+	group    singleflight.Group
+	requests uint64
 }
-
-const (
-	shardBits  = 8
-	shardCount = 1 << shardBits
-	shardMask  = shardCount - 1
-)
 
 var shards [shardCount]mxShardCacheObj
 
@@ -92,13 +96,26 @@ func (obj *EmailObj) HasMX() error {
 			entryErr = errNoMX
 		}
 
-		newEntry := &mxEntryObj{
-			err:    entryErr,
-			expire: time.Now().Add(nextTTL(entryErr == nil)).UnixNano(),
+		sh.mu.Lock()
+		sh.requests++
+
+		if sh.requests%pruneEveryN == 0 {
+			for k, v := range sh.data {
+				if now.UnixNano() > atomic.LoadInt64(&v.expire) {
+					delete(sh.data, k)
+				}
+			}
+			for len(sh.data) > maxEntriesPerShard {
+				for k := range sh.data {
+					delete(sh.data, k)
+					if len(sh.data) <= maxEntriesPerShard {
+						break
+					}
+				}
+			}
 		}
 
-		sh.mu.Lock()
-		sh.data[obj.domain] = newEntry
+		sh.data[obj.domain] = &mxEntryObj{err: entryErr, expire: now.Add(nextTTL(entryErr == nil)).UnixNano()}
 		sh.mu.Unlock()
 
 		return entryErr, nil

@@ -14,36 +14,26 @@ type EmailObj struct {
 
 //
 
-var newGroup singleflight.Group
+var (
+	NoCache  = true
+	newGroup singleflight.Group
+)
 
-func New(mail string) (*EmailObj, error) {
+func doParse(mail string, fast bool) (*EmailObj, error) {
+	if NoCache {
+		return parse(mail, fast)
+	}
+
 	v, err, _ := newGroup.Do(mail, func() (any, error) {
-		obj, err := parse(mail, false)
-		if err != nil {
-			return nil, err
-		}
-		return obj, nil
+		return parse(mail, fast)
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
 	return v.(*EmailObj), nil
 }
 
-func NewFast(mail string) (*EmailObj, error) {
-	v, err, _ := newGroup.Do(mail, func() (any, error) {
-		obj, err := parse(mail, true)
-		if err != nil {
-			return nil, err
-		}
-		return obj, nil
-	})
+//
 
-	if err != nil {
-		return nil, err
-	}
-
-	return v.(*EmailObj), nil
-}
+func New(mail string) (*EmailObj, error)     { return doParse(mail, false) }
+func NewFast(mail string) (*EmailObj, error) { return doParse(mail, true) }
