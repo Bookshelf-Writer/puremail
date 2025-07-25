@@ -230,32 +230,24 @@ func BenchmarkParse(b *testing.B) {
 		}
 
 		for prefix := 0; prefix < 2; prefix++ {
-			for free := 0; free < 2; free++ {
-				name := tc.name
-				if prefix == 1 {
-					name += "WithPrefixes"
-				}
-				if free == 1 {
-					name += "Free"
-				}
-
-				b.Run(name, func(b *testing.B) {
-					b.ReportAllocs()
-					b.ResetTimer()
-					for n := 0; n < b.N; n++ {
-						for _, addr := range addresses {
-							obj, err := parse(addr, prefix == 1)
-							if err != nil {
-								b.Fatal(err)
-							}
-							if free == 1 {
-								obj.Free()
-							}
-
-						}
-					}
-				})
+			name := tc.name
+			if prefix == 1 {
+				name += "WithPrefixes"
 			}
+
+			b.Run(name, func(b *testing.B) {
+				b.ReportAllocs()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					for _, addr := range addresses {
+						_, err := parse(addr, prefix == 1)
+						if err != nil {
+							b.Fatal(err)
+						}
+
+					}
+				}
+			})
 		}
 
 	}

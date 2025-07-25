@@ -17,9 +17,3 @@ func New(mail string) (*EmailObj, error) {
 func NewFast(mail string) (*EmailObj, error) {
 	return parse(mail, true)
 }
-
-//
-
-func (obj *EmailObj) Free() {
-	clearEmailPool(obj)
-}
