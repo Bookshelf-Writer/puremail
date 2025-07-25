@@ -28,6 +28,10 @@ type testEncodeObj struct {
 	wantErr error
 }
 
+func init() {
+	InitDefault()
+}
+
 //
 
 func TestBytesAndDecodeRoundtrip(t *testing.T) {

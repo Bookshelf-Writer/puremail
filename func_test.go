@@ -198,6 +198,50 @@ func TestParse_Errors(t *testing.T) {
 	}
 }
 
+func FuzzParse(f *testing.F) {
+	seeds := []string{
+		"user@example.com",
+		"ALICE+dev=gophers@Example.IO",
+		strings.Repeat("a", 63) + "@a.ua",
+		"bob@localhost",
+		"привіт@xn--80asehdb",
+		"a@b",
+		"",
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, mail string) {
+		for _, shot := range []bool{true, false} {
+			obj, err := parse(mail, shot)
+			if err != nil {
+				continue
+			}
+
+			if obj == nil {
+				t.Fatalf("parse(%q): err == nil, but obj == nil", mail)
+			}
+
+			if shot && len(obj.Prefixes()) != 0 {
+				t.Fatalf("shot‑mode: prefixes received %#v", obj.Prefixes())
+			}
+
+			if obj.Login() == "" || obj.Domain() == "" || !strings.Contains(obj.MailFull(), "@") {
+				t.Fatalf("incorrect object for%q: %+v", mail, obj)
+			}
+
+			reparse, err := parse(obj.MailFull(), false)
+			if err != nil {
+				t.Fatalf("re‑parse(%q): %v", obj.MailFull(), err)
+			}
+			if strings.ToLower(reparse.MailFull()) != strings.ToLower(obj.MailFull()) {
+				t.Fatalf("re‑parse mismatch: %q vs %q", reparse.MailFull(), obj.MailFull())
+			}
+		}
+	})
+}
+
 //
 
 type testParseAsyncObj struct {
