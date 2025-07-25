@@ -9,8 +9,6 @@ import (
 
 const hashBlockSize = 20
 
-//
-
 func (obj *EmailObj) sum(includePrefixes bool) (out [hashBlockSize]byte) {
 	h, _ := blake2b.New(hashBlockSize, nil)
 
@@ -28,6 +26,8 @@ func (obj *EmailObj) sum(includePrefixes bool) (out [hashBlockSize]byte) {
 	h.Sum(out[:0])
 	return
 }
+
+//
 
 func (obj *EmailObj) Hash() [hashBlockSize]byte     { return obj.sum(false) }
 func (obj *EmailObj) HashFull() [hashBlockSize]byte { return obj.sum(true) }
