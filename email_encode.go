@@ -35,6 +35,7 @@ func (obj *EmailObj) String() string {
 
 func (obj *EmailObj) Bytes() []byte {
 	var b bytes.Buffer
+	b.Grow(obj.len + 5)
 
 	b.WriteByte(byte(len(obj.login)))
 	b.WriteString(obj.login)
