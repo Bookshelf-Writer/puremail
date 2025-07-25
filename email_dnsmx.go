@@ -103,6 +103,7 @@ func mxInitValue(conf *ConfigObj) {
 						oldestExp := int64(^uint64(0) >> 1)
 						i := 0
 
+						//todo не забыть переписать на нормальное вытеснение как будет время
 						for k, v := range sh.data {
 							if i >= 64 {
 								break

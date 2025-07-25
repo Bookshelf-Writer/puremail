@@ -135,10 +135,10 @@ func main() {
 
 ## Constructors
 
-| Function            | Behaviour                                                           |
-|---------------------|---------------------------------------------------------------------|
-| `New(s string)`     | Validates and **trims prefixes** (`+`, `=`).                        |
-| `NewFast(s string)` | Same validation, but prefixes are treated as normal chars (faster). |
+| Function            | Behaviour                                               |
+|---------------------|---------------------------------------------------------|
+| `New(s string)`     | Validates and **trims prefixes** (`+`, `=`).            |
+| `NewFast(s string)` | Same validation, but prefixes are not treated (faster). |
 
 ---
 
