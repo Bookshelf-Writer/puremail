@@ -20,7 +20,6 @@ domain labels and lets you hash or encode the address in one line of code.
 | **MX probing**          | Optional `HasMX()` check to see if the domain has MX records                     |
 | **CRC‑protected bytes** | `Bytes()` / `Decode()` round‑trip with CRC‑32 guard                              |
 | **BLAKE2b‑160 hashes**  | `Hash()` (login+domain) and `HashFull()` (including prefixes)                    |
-| **Object pool**         | Reuse `EmailObj` via `Free()` for near‑zero allocations                          |
 
 > ⚠️ The library targets production back‑ends that need speed, not exhaustive RFC-5322 coverage.
 > See *Limitations* below.
@@ -75,7 +74,6 @@ func main() {
 | `(*EmailObj) Hash()`     | `[20]byte`                         | `fmt.Printf("%x", e.Hash())`                |
 | `(*EmailObj) HashFull()` | `[20]byte`                         | same but with prefixes                      |
 | `(*EmailObj) HasMX()`    | `error` (`nil` if at least one MX) | `if err := e.HasMX(); err != nil { ... }`   |
-| `(*EmailObj) Free()`     | —                                  | return object to pool                       |
 
 ### `EmailPrefixObj`
 

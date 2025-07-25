@@ -1,5 +1,9 @@
 package puremail
 
+import (
+	"errors"
+)
+
 // // // // // // // // // //
 
 var loginTable [256]bool
@@ -95,14 +99,22 @@ func isValidDomain(s string) bool {
 	return true
 }
 
+func parseRecover(err *error) {
+	if r := recover(); r != nil {
+		*err = errors.Join(ErrPanic, *err)
+	}
+}
+
 // //
 
-func parse(s string, isShot bool) (*EmailObj, error) {
+func parse(s string, isShot bool) (obj *EmailObj, err error) {
 	if len(s) > 254 {
 		return nil, ErrLenMax
 	}
 
-	obj := new(EmailObj)
+	defer parseRecover(&err)
+
+	obj = new(EmailObj)
 	obj.len = len(s)
 
 	var buf [254]byte
@@ -123,15 +135,18 @@ func parse(s string, isShot bool) (*EmailObj, error) {
 				tag = 0
 			} else {
 				if bufLen == 0 {
-					return nil, ErrInvalidLogin
+					err = ErrInvalidLogin
+					return
 				}
 				if len(obj.login) > 0 {
-					return nil, ErrManyA
+					err = ErrManyA
+					return
 				}
 
 				obj.login = string(buf[:bufLen])
 				if !isValidLogin(obj.login) {
-					return nil, ErrInvalidLoginChars
+					err = ErrInvalidLoginChars
+					return
 				}
 			}
 
@@ -141,12 +156,14 @@ func parse(s string, isShot bool) (*EmailObj, error) {
 		case '+', '=':
 			if len(obj.login) == 0 {
 				if bufLen == 0 {
-					return nil, ErrInvalidLogin
+					err = ErrInvalidLogin
+					return
 				}
 
 				obj.login = string(buf[:bufLen])
 				if !isValidLogin(obj.login) {
-					return nil, ErrInvalidLoginChars
+					err = ErrInvalidLoginChars
+					return
 				}
 
 			} else if tag != 0 && !isShot {
@@ -174,19 +191,23 @@ func parse(s string, isShot bool) (*EmailObj, error) {
 	switch status {
 	case 1:
 		if bufLen == 0 {
-			return nil, ErrInvalidDomain
+			err = ErrInvalidDomain
+			return
 		}
 		obj.domain = string(buf[:bufLen])
 
 		if !isValidDomain(obj.domain) {
-			return nil, ErrInvalidDomainChars
+			err = ErrInvalidDomainChars
+			return
 		}
-		return obj, nil
+		return
 
 	case 2:
-		return nil, ErrEndToTag
+		err = ErrEndToTag
+		return
 
 	default:
-		return nil, ErrEndToEOF
+		err = ErrEndToEOF
+		return
 	}
 }
