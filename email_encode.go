@@ -33,24 +33,34 @@ func (obj *EmailObj) String() string {
 }
 
 func (obj *EmailObj) Bytes() []byte {
-	buf := make([]byte, 0, obj.len+5)
+	total := 1 + len(obj.login) + 1 + len(obj.domain) + 4
+	for _, p := range obj.prefixes {
+		total += 1 + 1 + len(p.text)
+	}
+	buf := make([]byte, total)
 
-	buf = append(buf, byte(len(obj.login)))
-	buf = append(buf, obj.login...)
+	i := 0
+	buf[i] = byte(len(obj.login))
+	i++
+	copy(buf[i:], obj.login)
+	i += len(obj.login)
 
-	buf = append(buf, byte(len(obj.domain)))
-	buf = append(buf, obj.domain...)
+	buf[i] = byte(len(obj.domain))
+	i++
+	copy(buf[i:], obj.domain)
+	i += len(obj.domain)
 
 	for _, p := range obj.prefixes {
-		buf = append(buf, p.char)
-		buf = append(buf, byte(len(p.text)))
-		buf = append(buf, p.text...)
+		buf[i] = p.char
+		i++
+		buf[i] = byte(len(p.text))
+		i++
+		copy(buf[i:], p.text)
+		i += len(p.text)
 	}
 
-	crc := make([]byte, 4)
-	binary.LittleEndian.PutUint32(crc, crc32.ChecksumIEEE(buf))
-	buf = append(buf, crc...)
-
+	crc := crc32.ChecksumIEEE(buf[:i])
+	binary.LittleEndian.PutUint32(buf[i:], crc)
 	return buf
 }
 
