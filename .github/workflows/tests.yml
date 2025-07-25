@@ -71,7 +71,7 @@ jobs:
         run: go mod tidy
 
       - name: Run tests
-        run: go test -v ./... || exit 1
+        run: go test -race -v ./... || exit 1
 
       - name: Run benchmarks
         run: go test -bench . -run=NONE -v ./... || exit 1
