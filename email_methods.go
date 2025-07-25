@@ -28,11 +28,14 @@ func (obj *EmailObj) MailFull() string {
 	}
 
 	b := make([]byte, 0, obj.len)
-	for _, p := range obj.prefixes {
-		b = append(b, p.text...)
-		b = append(b, p.char)
-	}
+
 	b = append(b, obj.login...)
+
+	for _, p := range obj.prefixes {
+		b = append(b, p.char)
+		b = append(b, p.text...)
+	}
+
 	b = append(b, '@')
 	b = append(b, obj.domain...)
 

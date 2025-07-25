@@ -118,7 +118,7 @@ func parseInto(obj *EmailObj, s string, isShot bool) error {
 
 	var buf [254]byte
 	bufLen := 0
-	var status byte
+	var status, tag byte
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
@@ -129,32 +129,57 @@ func parseInto(obj *EmailObj, s string, isShot bool) error {
 
 		switch c {
 		case '@':
-			if bufLen == 0 {
-				return ErrInvalidLogin
-			}
-			if len(obj.login) > 0 {
-				return ErrManyA
+			if tag != 0 && !isShot {
+				obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: tag, text: string(buf[:bufLen])})
+				tag = 0
+			} else {
+				if bufLen == 0 {
+					return ErrInvalidLogin
+				}
+				if len(obj.login) > 0 {
+					return ErrManyA
+				}
+
+				obj.login = string(buf[:bufLen])
+				if !isValidLogin(obj.login) {
+					return ErrInvalidLoginChars
+				}
 			}
 
-			obj.login = string(buf[:bufLen])
 			bufLen = 0
 			status = 1
 
-			if !isValidLogin(obj.login) {
-				return ErrInvalidLoginChars
-			}
-
 		case '+', '=':
-			status = 2
-			if !isShot {
-				obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: c, text: string(buf[:bufLen])})
+			if len(obj.login) == 0 {
+				if bufLen == 0 {
+					return ErrInvalidLogin
+				}
+
+				obj.login = string(buf[:bufLen])
+				if !isValidLogin(obj.login) {
+					return ErrInvalidLoginChars
+				}
+
+			} else if tag != 0 && !isShot {
+				obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: tag, text: string(buf[:bufLen])})
 			}
+			tag = c
 			bufLen = 0
+			status = 2
 
 		default:
 			buf[bufLen] = c
 			bufLen++
 		}
+	}
+
+	if tag != 0 {
+		if !isShot {
+			obj.prefixes = append(obj.prefixes,
+				EmailPrefixObj{char: tag, text: string(buf[:bufLen])})
+		}
+		tag = 0
+		bufLen = 0
 	}
 
 	switch status {

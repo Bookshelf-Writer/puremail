@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 			name:         "valid with prefixes (full)",
 			input:        "alice+dev=go@example.io",
 			isShot:       false,
-			wantLogin:    "go",
+			wantLogin:    "alice",
 			wantDomain:   "example.io",
 			wantPrefixes: 2,
 		},
@@ -109,6 +109,10 @@ func TestParse(t *testing.T) {
 			}
 			if tc.isShot && len(got.prefixes) != 0 {
 				t.Errorf("in shot-mode prefixes should be 0 received %#v", len(got.prefixes))
+			}
+
+			if strings.ToLower(tc.input) != got.MailFull() {
+				t.Errorf("input = %q, want %q", got.MailFull(), tc.input)
 			}
 		})
 	}
