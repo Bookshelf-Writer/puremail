@@ -94,15 +94,12 @@ same, _ := puremail.Decode(blob)
 fmt.Println(same.Mail()) // bob@gmail.com
 ```
 
-> The binary layout is:
-> `[len(login)]login[len(domain)]domain{prefix delimiter, len, text}*CRC32`.
-
 ## Limitations
 
 * Only ASCII input; for non‑ASCII domains supply punycode (`пример.укр` → `xn--e1afmkfd.xn--j1amh`).
 * No quoted‑local‑part, comments, IP‑literals.
 * Max length **254 bytes** (same as most ESPs).
-* `HasMX()` performs a network DNS lookup – call sparingly.
+* `HasMX()` performs a network DNS lookup.
 
 ## Advantages of prefix clipping (`+`, `=`)
 
@@ -110,10 +107,6 @@ fmt.Println(same.Mail()) // bob@gmail.com
 * **Uniqueness:** your DB stores only one canonical form per user.
 * **Predictable hashing:** hashes are stable even if the user modifies the tag.
 
-## Drawbacks
-
-* Some services allow *multiple* pluses or treat `=` differently – stripping may yield collisions.
-* If you rely on tags for routing, use `MailFull()` or `Prefixes()` instead of `Mail()`.
 
 ---
 
