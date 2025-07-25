@@ -160,6 +160,25 @@ func TestMxSingleFlight(t *testing.T) {
 	}
 }
 
+func TestMxConcurrencyLimit(t *testing.T) {
+	start := make(chan struct{})
+	done := make(chan struct{})
+
+	for i := 0; i < 3; i++ {
+		go func() {
+			<-start
+			newObj("", "example.com").HasMX()
+			done <- struct{}{}
+		}()
+	}
+	close(start)
+
+	time.Sleep(100 * time.Millisecond)
+	if n := len(done); n > 2 {
+		t.Fatalf("limit broken: %d done, want ≤2", n)
+	}
+}
+
 // //
 
 func BenchmarkEmailBytesPrefix(b *testing.B) {

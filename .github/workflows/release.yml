@@ -96,7 +96,7 @@ jobs:
 
 
           # 1️⃣ Прибираємо зайві шляхи лише з індексу — без помилок, якщо файлів немає
-          git rm -r --cached --ignore-unmatch .github _run .gitignore
+          git rm -r --cached --ignore-unmatch .github _run .gitignore .idea
           git rm --cached --ignore-unmatch $(git ls-files '*.bin' '*.md')
           
           # 2️⃣ Коміт та тег

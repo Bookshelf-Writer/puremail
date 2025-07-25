@@ -65,51 +65,56 @@ func (obj *EmailObj) Bytes() []byte {
 }
 
 func Decode(data []byte) (*EmailObj, error) {
-	if len(data) < 4+2 {
+	payloadLen := len(data) - 4
+	if payloadLen < 2 {
 		return nil, ErrTooShort
 	}
 
-	wantCRC := binary.LittleEndian.Uint32(data[len(data)-4:])
-	if crc32.ChecksumIEEE(data[:len(data)-4]) != wantCRC {
+	wantCRC := binary.LittleEndian.Uint32(data[payloadLen:])
+	if crc32.ChecksumIEEE(data[:payloadLen]) != wantCRC {
 		return nil, ErrCRC
 	}
 
+	pos := 0
+	loginLen := int(data[pos])
+	pos++
+
+	if loginLen == 0 || pos+loginLen > payloadLen {
+		return nil, ErrMalformed
+	}
 	obj := new(EmailObj)
-	obj.len = 1
+	obj.login = string(data[pos : pos+loginLen])
+	pos += loginLen
 
-	if data[0] == 0 || int(data[0]) > len(data)-obj.len {
+	if pos >= payloadLen {
 		return nil, ErrMalformed
 	}
-	obj.login = string(data[1 : data[0]+1])
-	obj.len += len(obj.login)
-
-	if data[data[0]+1] == 0 || int(data[data[0]+1]) > len(data)-obj.len {
+	domainLen := int(data[pos])
+	pos++
+	if domainLen == 0 || pos+domainLen > payloadLen {
 		return nil, ErrMalformed
 	}
-	obj.domain = string(data[data[0]+2 : data[0]+2+data[data[0]+1]])
-	obj.len += len(obj.domain)
+	obj.domain = string(data[pos : pos+domainLen])
+	pos += domainLen
 
-	payload := data[data[0]+2+data[data[0]+1] : len(data)-4]
-	if len(data[data[0]+2+data[data[0]+1]:len(data)-4]) != 0 {
-		obj.prefixes = make([]EmailPrefixObj, 0, 2)
-
+	if pos < payloadLen {
 		var prefix byte
-		for i := 0; i < len(payload); i++ {
-			if prefix == 0 {
-				prefix = payload[i]
-				continue
-			} else {
-				bufLen := int(payload[i])
-				if bufLen == 0 || bufLen > len(data)-obj.len {
-					return nil, ErrMalformed
-				}
+		txtLen := 0
 
-				obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: prefix, text: string(payload[i+1 : i+bufLen+1])})
-
-				prefix = 0
-				i += bufLen
-				obj.len += bufLen + 1
+		for pos < payloadLen {
+			prefix = data[pos]
+			pos++
+			if pos >= payloadLen {
+				return nil, ErrMalformed
 			}
+
+			txtLen = int(data[pos])
+			pos++
+			if txtLen == 0 || pos+txtLen > payloadLen {
+				return nil, ErrMalformed
+			}
+			obj.prefixes = append(obj.prefixes, EmailPrefixObj{char: prefix, text: string(data[pos : pos+txtLen])})
+			pos += txtLen
 		}
 	}
 

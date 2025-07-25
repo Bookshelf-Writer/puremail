@@ -19,5 +19,6 @@ var (
 	ErrCRC       = errors.New("CRC‑32 mismatch")
 	ErrMalformed = errors.New("malformed payload")
 
-	ErrNilMX = errors.New("no MX records found")
+	ErrNilMX         = errors.New("no MX records found")
+	ErrToManyLookups = errors.New("too many lookups")
 )
